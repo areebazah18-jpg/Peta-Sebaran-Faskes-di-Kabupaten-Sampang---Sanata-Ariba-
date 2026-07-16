@@ -1,0 +1,1095 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/L.Control.Locate.min.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        </style>
+        <title>PETA SEBARAN FASILITAS KESEHATAN DI KABUPATEN SAMPANG, JAWA TIMUR</title>
+    </head>
+    <body>
+        <div id="map">
+        </div>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/L.Control.Locate.min.js"></script>
+        <script src="js/multi-style-layer.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="data/KabupatenSampang_1.js"></script>
+        <script src="data/Puskesmas_2.js"></script>
+        <script src="data/Laboratorium_3.js"></script>
+        <script src="data/Apotek_4.js"></script>
+        <script src="data/RSdanKlinik_5.js"></script>
+        <script>
+        var map = L.map('map', {
+            zoomControl:false, maxZoom:28, minZoom:1
+        }).fitBounds([[-7.027149254359834,113.13639562477135],[-6.789762860872166,113.57785102318701]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/qgis2web/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // modify popup if contains media
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var imgTd = tempDiv.querySelector('td img');
+            if (imgTd) {
+                var src = imgTd.getAttribute('src');
+                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                    popup._contentNode.classList.add('media');
+                    var img = popup._contentNode.querySelector('td img');
+                    if (img) {
+                        // If already loaded (cache), update immediately
+                        if (img.complete && img.naturalHeight > 0) {
+                            popup.update();
+                        } else {
+                            img.addEventListener('load', function() {
+                                popup.update();
+                            });
+                            img.addEventListener('error', function() {
+                                popup.update();
+                            });
+                        }
+                    }
+                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
+                    var audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = src;
+                    imgTd.parentNode.replaceChild(audio, imgTd);
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
+                    var video = document.createElement('video');
+                    video.controls = true;
+                    video.src = src;
+                    video.style.width = "400px";
+                    video.style.height = "300px";
+                    video.style.maxHeight = "60vh";
+                    video.style.maxWidth = "60vw";
+                    imgTd.parentNode.replaceChild(video, imgTd);
+                    popup._contentNode.classList.add('media');
+                    // Aggiorna il popup quando il video carica i metadati
+                    video.addEventListener('loadedmetadata', function() {
+                        popup.update();
+                    });
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else {
+                    popup._contentNode.classList.remove('media');
+                }
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var title = new L.Control({'position':'bottomleft'});
+        title.onAdd = function (map) {
+            this._div = L.DomUtil.create('div', 'info');
+            this.update();
+            return this._div;
+        };
+        title.update = function () {
+            this._div.innerHTML = '<h2>PETA SEBARAN FASILITAS KESEHATAN DI KABUPATEN SAMPANG, JAWA TIMUR</h2>';
+        };
+        title.addTo(map);
+        var abstract = new L.Control({'position':'topright'});
+        abstract.onAdd = function (map) {
+            this._div = L.DomUtil.create('div',
+            'leaflet-control abstract');
+            this._div.id = 'abstract'
+                this._div.setAttribute("onmouseenter", "abstract.show()");
+                this._div.setAttribute("onmouseleave", "abstract.hide()");
+                this.hide();
+                return this._div;
+            };
+            abstract.hide = function () {
+                this._div.classList.remove("abstractUncollapsed");
+                this._div.classList.add("abstract");
+                this._div.innerHTML = 'i'
+            }
+            abstract.show = function () {
+                this._div.classList.remove("abstract");
+                this._div.classList.add("abstractUncollapsed");
+                this._div.innerHTML = 'Peta ini menyajikan sebaran fasiltas kesehatan (faskes) di Kabupaten Sampang yang dapat dieksplorasi secara interaktif. Klik setiap ikon faskes untuk melihat informasi lokasi dan dokumentasi yang tersedia.<br /><br />Sumber Data: <br />- Google Maps (Lokasi Faskes)<br />- Peta Rupa Bumi Indonesia (Batas Kecamatan)<br />- BPS Kabupaten Sampang (Data Demografi)<br /><br />Dibuat oleh:<br />Sanata Ariba Zahra<br />NIM 11231010000018<br />Peminatan Epidemiologi<br />Program Studi Kesehatan Masyarakat<br />Fakultas Ilmu KKesehatan<br />UIN Syarif Hidayatullah Jakarta<br /><br />Petunjuk Penggunaan:<br />1. Klik ikon faskes untuk melihat informasi lokasi<br />2. Gunakan fitur "Search" untuk mencari nama faskes<br />3. Gunakan "Measure" untuk mengukur jarak dan luas<br />4. Gunakan tombol "Layer" untuk mengktifkanatau menonaktifkan layer peta.';
+        };
+        abstract.addTo(map);
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        L.control.locate({locateOptions: {maxZoom: 19}}).addTo(map);
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares'
+        });
+        measureControl.addTo(map);
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+        }
+        map.createPane('pane_GoogleMaps_0');
+        map.getPane('pane_GoogleMaps_0').style.zIndex = 400;
+        var layer_GoogleMaps_0 = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            pane: 'pane_GoogleMaps_0',
+            opacity: 1.0,
+            attribution: '',
+            minZoom: 1,
+            maxZoom: 28,
+        });
+        layer_GoogleMaps_0;
+        map.addLayer(layer_GoogleMaps_0);
+        function pop_KabupatenSampang_1(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">WADMKC</th>\
+                        <td class="visible-with-data" id="WADMKC">' + (feature.properties['WADMKC'] !== null ? autolinker.link(String(feature.properties['WADMKC']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">WADMKK</th>\
+                        <td>' + (feature.properties['WADMKK'] !== null ? autolinker.link(String(feature.properties['WADMKK']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Jml Pddk</th>\
+                        <td>' + (feature.properties['Jml Pddk'] !== null ? autolinker.link(String(feature.properties['Jml Pddk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Kep Pddk</th>\
+                        <td>' + (feature.properties['Kep Pddk'] !== null ? autolinker.link(String(feature.properties['Kep Pddk']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Jml Kel Hd</th>\
+                        <td>' + (feature.properties['Jml Kel Hd'] !== null ? autolinker.link(String(feature.properties['Jml Kel Hd']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Luas Wil</th>\
+                        <td>' + (feature.properties['Luas Wil'] !== null ? autolinker.link(String(feature.properties['Luas Wil']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Kecamatan'] !== null ? autolinker.link(String(feature.properties['Kecamatan']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_KabupatenSampang_1_0(feature) {
+            switch(String(feature.properties['WADMKC'])) {
+                case 'Banyuates':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(208,28,139,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Camplong':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(217,72,162,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Jrengik':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(227,116,184,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Karangpenang':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(236,160,207,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Kedungdung':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(242,191,222,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Ketapang':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(244,210,230,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Omben':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(245,228,239,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Pangarengan':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(247,247,247,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Robatal':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(229,241,215,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Sampang':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(211,234,182,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Sokobanah':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(193,228,150,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Sreseh':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(169,217,120,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Tambelangan':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(138,202,93,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Torjun':
+                    return {
+                pane: 'pane_KabupatenSampang_1',
+                stroke: false, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(108,187,65,1.0)',
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_KabupatenSampang_1');
+        map.getPane('pane_KabupatenSampang_1').style.zIndex = 401;
+        map.getPane('pane_KabupatenSampang_1').style['mix-blend-mode'] = 'normal';
+        var layer_KabupatenSampang_1 = new L.geoJson(json_KabupatenSampang_1, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_KabupatenSampang_1',
+            layerName: 'layer_KabupatenSampang_1',
+            pane: 'pane_KabupatenSampang_1',
+            onEachFeature: pop_KabupatenSampang_1,
+            style: style_KabupatenSampang_1_0,
+        });
+        bounds_group.addLayer(layer_KabupatenSampang_1);
+        map.addLayer(layer_KabupatenSampang_1);
+        function pop_Puskesmas_2(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">id</th>\
+                        <td>' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Puskesmas</th>\
+                        <td>' + (feature.properties['Puskesmas'] !== null ? autolinker.link(String(feature.properties['Puskesmas']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Alamat</th>\
+                        <td>' + (feature.properties['Alamat'] !== null ? autolinker.link(String(feature.properties['Alamat']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Kontak</th>\
+                        <td class="visible-with-data" id="Kontak">' + (feature.properties['Kontak'] !== null ? autolinker.link(String(feature.properties['Kontak']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Foto</th>\
+                        <td class="visible-with-data" id="Foto">' + (feature.properties['Foto'] !== null ? '<img src="images/' + String(feature.properties['Foto']).replace(/[\\/:]/g, '_').trim().replace(/'/g, '\'').replace(/"/g, '&quot;') + '">' : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Puskesmas_2_0(feature) {
+            switch(String(feature.properties['Puskesmas'])) {
+                case 'Puskemas Tambelangan':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Banyuanyar Sampang':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Banyuates':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Camplong':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Karangpenang':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Kedungdung':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Ketapang':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Omben':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Pangarengan':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Robatal':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Sreseh':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Puskesmas Torjun':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Pustu Bancelok':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Pustu Sokobanah Daya':
+                    return {
+                pane: 'pane_Puskesmas_2',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Puskesmas_2.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_Puskesmas_2');
+        map.getPane('pane_Puskesmas_2').style.zIndex = 402;
+        map.getPane('pane_Puskesmas_2').style['mix-blend-mode'] = 'normal';
+        var layer_Puskesmas_2 = new L.geoJson(json_Puskesmas_2, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Puskesmas_2',
+            layerName: 'layer_Puskesmas_2',
+            pane: 'pane_Puskesmas_2',
+            onEachFeature: pop_Puskesmas_2,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_Puskesmas_2_0(feature));
+            },
+        });
+        bounds_group.addLayer(layer_Puskesmas_2);
+        map.addLayer(layer_Puskesmas_2);
+        function pop_Laboratorium_3(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">id</th>\
+                        <td>' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Nama lab</th>\
+                        <td>' + (feature.properties['Nama lab'] !== null ? autolinker.link(String(feature.properties['Nama lab']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Alamat</th>\
+                        <td>' + (feature.properties['Alamat'] !== null ? autolinker.link(String(feature.properties['Alamat']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Kontak</th>\
+                        <td>' + (feature.properties['Kontak'] !== null ? autolinker.link(String(feature.properties['Kontak']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row"> Foto</th>\
+                        <td>' + (feature.properties[' Foto'] !== null ? '<img src="images/' + String(feature.properties[' Foto']).replace(/[\\/:]/g, '_').trim().replace(/'/g, '\'').replace(/"/g, '&quot;') + '">' : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Laboratorium_3_0(feature) {
+            switch(String(feature.properties['Nama lab'])) {
+                case 'Laboratorium Klinik AlphaLab':
+                    return {
+                pane: 'pane_Laboratorium_3',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Laboratorium_3.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_Laboratorium_3');
+        map.getPane('pane_Laboratorium_3').style.zIndex = 403;
+        map.getPane('pane_Laboratorium_3').style['mix-blend-mode'] = 'normal';
+        var layer_Laboratorium_3 = new L.geoJson(json_Laboratorium_3, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Laboratorium_3',
+            layerName: 'layer_Laboratorium_3',
+            pane: 'pane_Laboratorium_3',
+            onEachFeature: pop_Laboratorium_3,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_Laboratorium_3_0(feature));
+            },
+        });
+        bounds_group.addLayer(layer_Laboratorium_3);
+        map.addLayer(layer_Laboratorium_3);
+        function pop_Apotek_4(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">id</th>\
+                        <td>' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Apotek</th>\
+                        <td>' + (feature.properties['Apotek'] !== null ? autolinker.link(String(feature.properties['Apotek']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Alamat</th>\
+                        <td class="visible-with-data" id="Alamat">' + (feature.properties['Alamat'] !== null ? autolinker.link(String(feature.properties['Alamat']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Kontak</th>\
+                        <td>' + (feature.properties['Kontak'] !== null ? autolinker.link(String(feature.properties['Kontak']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Foto</th>\
+                        <td>' + (feature.properties['Foto'] !== null ? '<img src="images/' + String(feature.properties['Foto']).replace(/[\\/:]/g, '_').trim().replace(/'/g, '\'').replace(/"/g, '&quot;') + '">' : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Apotek_4_0(feature) {
+            switch(String(feature.properties['Apotek'])) {
+                case 'Apotek Maya Farma':
+                    return {
+                pane: 'pane_Apotek_4',
+                radius: 10.4,
+                opacity: 1,
+                color: 'rgba(250,250,250,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 4.0,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,255,255,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Apotek NF Farma':
+                    return {
+                pane: 'pane_Apotek_4',
+                radius: 10.4,
+                opacity: 1,
+                color: 'rgba(250,250,250,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 4.0,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,255,255,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Apotek Rajawali Sampang':
+                    return {
+                pane: 'pane_Apotek_4',
+                radius: 10.4,
+                opacity: 1,
+                color: 'rgba(250,250,250,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 4.0,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,255,255,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Apotek Syarifah':
+                    return {
+                pane: 'pane_Apotek_4',
+                radius: 10.4,
+                opacity: 1,
+                color: 'rgba(250,250,250,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 4.0,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,255,255,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Apotek Trivita Farma':
+                    return {
+                pane: 'pane_Apotek_4',
+                radius: 10.4,
+                opacity: 1,
+                color: 'rgba(250,250,250,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 4.0,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,255,255,1.0)',
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        function style_Apotek_4_1(feature) {
+            switch(String(feature.properties['Apotek'])) {
+                case 'Apotek Maya Farma':
+                    return {
+                pane: 'pane_Apotek_4',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Apotek_4.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Apotek NF Farma':
+                    return {
+                pane: 'pane_Apotek_4',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Apotek_4.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Apotek Rajawali Sampang':
+                    return {
+                pane: 'pane_Apotek_4',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Apotek_4.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Apotek Syarifah':
+                    return {
+                pane: 'pane_Apotek_4',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Apotek_4.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Apotek Trivita Farma':
+                    return {
+                pane: 'pane_Apotek_4',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Apotek_4.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_Apotek_4');
+        map.getPane('pane_Apotek_4').style.zIndex = 404;
+        map.getPane('pane_Apotek_4').style['mix-blend-mode'] = 'normal';
+        var layer_Apotek_4 = new L.geoJson.multiStyle(json_Apotek_4, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Apotek_4',
+            layerName: 'layer_Apotek_4',
+            pane: 'pane_Apotek_4',
+            onEachFeature: pop_Apotek_4,
+            pointToLayers: [function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_Apotek_4_0(feature));
+            },function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_Apotek_4_1(feature));
+            },
+        ]});
+        bounds_group.addLayer(layer_Apotek_4);
+        map.addLayer(layer_Apotek_4);
+        function pop_RSdanKlinik_5(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">id</th>\
+                        <td>' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">RS/Klinik</th>\
+                        <td>' + (feature.properties['RS/Klinik'] !== null ? autolinker.link(String(feature.properties['RS/Klinik']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Alamat</th>\
+                        <td>' + (feature.properties['Alamat'] !== null ? autolinker.link(String(feature.properties['Alamat']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Kontak</th>\
+                        <td>' + (feature.properties['Kontak'] !== null ? autolinker.link(String(feature.properties['Kontak']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Foto</th>\
+                        <td>' + (feature.properties['Foto'] !== null ? '<img src="images/' + String(feature.properties['Foto']).replace(/[\\/:]/g, '_').trim().replace(/'/g, '\'').replace(/"/g, '&quot;') + '">' : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_RSdanKlinik_5_0(feature) {
+            switch(String(feature.properties['RS/Klinik'])) {
+                case 'Klinik dan Apotek Setya Medika':
+                    return {
+                pane: 'pane_RSdanKlinik_5',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/RSdanKlinik_5.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Klinik Jasmine':
+                    return {
+                pane: 'pane_RSdanKlinik_5',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/RSdanKlinik_5.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'Klinik Lisa':
+                    return {
+                pane: 'pane_RSdanKlinik_5',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/RSdanKlinik_5.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'RS Qona\'ah':
+                    return {
+                pane: 'pane_RSdanKlinik_5',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/RSdanKlinik_5.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'RSUD dr. Mohammad Zyn Sampang':
+                    return {
+                pane: 'pane_RSdanKlinik_5',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/RSdanKlinik_5.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+                case 'RSUD Ketapang Sampang':
+                    return {
+                pane: 'pane_RSdanKlinik_5',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/RSdanKlinik_5.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_RSdanKlinik_5');
+        map.getPane('pane_RSdanKlinik_5').style.zIndex = 405;
+        map.getPane('pane_RSdanKlinik_5').style['mix-blend-mode'] = 'normal';
+        var layer_RSdanKlinik_5 = new L.geoJson(json_RSdanKlinik_5, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_RSdanKlinik_5',
+            layerName: 'layer_RSdanKlinik_5',
+            pane: 'pane_RSdanKlinik_5',
+            onEachFeature: pop_RSdanKlinik_5,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_RSdanKlinik_5_0(feature));
+            },
+        });
+        bounds_group.addLayer(layer_RSdanKlinik_5);
+        map.addLayer(layer_RSdanKlinik_5);
+        const url = {"Nominatim OSM": "https://nominatim.openstreetmap.org/search?format=geojson&addressdetails=1&",
+        "France BAN": "https://api-adresse.data.gouv.fr/search/?"}
+        var photonControl = L.control.photon({
+            url: url["Nominatim OSM"],
+            feedbackLabel: '',
+            position: 'topleft',
+            includePosition: true,
+            initial: true,
+            // resultsHandler: myHandler,
+        }).addTo(map);
+        photonControl._container.childNodes[0].style.borderRadius="10px"
+        // Create a variable to store the geoJSON data
+        var x = null;
+        // Create a variable to store the marker
+        var marker = null;
+        // Add an event listener to the Photon control to create a marker from the returned geoJSON data
+        var z = null;
+        photonControl.on('selected', function(e) {
+            console.log(photonControl.search.resultsContainer);
+            if (x != null) {
+                map.removeLayer(obj3.marker);
+                map.removeLayer(x);
+            }
+            obj2.gcd = e.choice;
+            x = L.geoJSON(obj2.gcd).addTo(map);
+            var label = typeof obj2.gcd.properties.label === 'undefined' ? obj2.gcd.properties.display_name : obj2.gcd.properties.label;
+            obj3.marker = L.marker(x.getLayers()[0].getLatLng()).bindPopup(label).addTo(map);
+            map.setView(x.getLayers()[0].getLatLng(), 17);
+            z = typeof e.choice.properties.label === 'undefined'? e.choice.properties.display_name : e.choice.properties.label;
+            console.log(e);
+            e.target.input.value = z;
+        });
+        var search = document.getElementsByClassName("leaflet-photon leaflet-control")[0];
+        search.classList.add("leaflet-control-search")
+        search.style.display = "flex";
+        search.style.backgroundColor="rgba(255,255,255,0.5)" 
+
+        // Create the new button element
+        var button = document.createElement("div");
+        button.id = "gcd-button-control";
+        button.className = "gcd-gl-btn fa fa-search search-button";
+
+        // Insert the button at the beginning of the search control
+        search.insertBefore(button, search.firstChild);
+        last = search.lastChild;
+        last.style.display = "none";
+        button.addEventListener("click", function (e) {
+            if (last.style.display === "none") {
+                last.style.display = "block";
+            } else {
+                last.style.display = "none";
+            }
+        });
+        var overlaysTree = [
+            {label: 'RS dan Klinik<br /><table><tr><td style="text-align: center;"><img src="legend/RSdanKlinik_5_KlinikdanApotekSetyaMedika0.png" /></td><td>Klinik dan Apotek Setya Medika</td></tr><tr><td style="text-align: center;"><img src="legend/RSdanKlinik_5_KlinikJasmine1.png" /></td><td>Klinik Jasmine</td></tr><tr><td style="text-align: center;"><img src="legend/RSdanKlinik_5_KlinikLisa2.png" /></td><td>Klinik Lisa</td></tr><tr><td style="text-align: center;"><img src="legend/RSdanKlinik_5_RSQonaah3.png" /></td><td>RS Qona\'ah</td></tr><tr><td style="text-align: center;"><img src="legend/RSdanKlinik_5_RSUDdrMohammadZynSampang4.png" /></td><td>RSUD dr. Mohammad Zyn Sampang</td></tr><tr><td style="text-align: center;"><img src="legend/RSdanKlinik_5_RSUDKetapangSampang5.png" /></td><td>RSUD Ketapang Sampang</td></tr></table>', layer: layer_RSdanKlinik_5},
+            {label: 'Apotek<br /><table><tr><td style="text-align: center;"><img src="legend/Apotek_4_ApotekMayaFarma0.png" /></td><td>Apotek Maya Farma</td></tr><tr><td style="text-align: center;"><img src="legend/Apotek_4_ApotekNFFarma1.png" /></td><td>Apotek NF Farma</td></tr><tr><td style="text-align: center;"><img src="legend/Apotek_4_ApotekRajawaliSampang2.png" /></td><td>Apotek Rajawali Sampang</td></tr><tr><td style="text-align: center;"><img src="legend/Apotek_4_ApotekSyarifah3.png" /></td><td>Apotek Syarifah</td></tr><tr><td style="text-align: center;"><img src="legend/Apotek_4_ApotekTrivitaFarma4.png" /></td><td>Apotek Trivita Farma</td></tr></table>', layer: layer_Apotek_4},
+            {label: 'Laboratorium<br /><table><tr><td style="text-align: center;"><img src="legend/Laboratorium_3_LaboratoriumKlinikAlphaLab0.png" /></td><td>Laboratorium Klinik AlphaLab</td></tr></table>', layer: layer_Laboratorium_3},
+            {label: 'Puskesmas<br /><table><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PuskemasTambelangan0.png" /></td><td>Puskemas Tambelangan</td></tr><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PuskesmasBanyuanyarSampang1.png" /></td><td>Puskesmas Banyuanyar Sampang</td></tr><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PuskesmasBanyuates2.png" /></td><td>Puskesmas Banyuates</td></tr><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PuskesmasCamplong3.png" /></td><td>Puskesmas Camplong</td></tr><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PuskesmasKarangpenang4.png" /></td><td>Puskesmas Karangpenang</td></tr><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PuskesmasKedungdung5.png" /></td><td>Puskesmas Kedungdung</td></tr><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PuskesmasKetapang6.png" /></td><td>Puskesmas Ketapang</td></tr><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PuskesmasOmben7.png" /></td><td>Puskesmas Omben</td></tr><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PuskesmasPangarengan8.png" /></td><td>Puskesmas Pangarengan</td></tr><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PuskesmasRobatal9.png" /></td><td>Puskesmas Robatal</td></tr><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PuskesmasSreseh10.png" /></td><td>Puskesmas Sreseh</td></tr><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PuskesmasTorjun11.png" /></td><td>Puskesmas Torjun</td></tr><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PustuBancelok12.png" /></td><td>Pustu Bancelok</td></tr><tr><td style="text-align: center;"><img src="legend/Puskesmas_2_PustuSokobanahDaya13.png" /></td><td>Pustu Sokobanah Daya</td></tr></table>', layer: layer_Puskesmas_2},
+            {label: 'Kabupaten Sampang<br /><table><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Banyuates0.png" /></td><td>Banyuates</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Camplong1.png" /></td><td>Camplong</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Jrengik2.png" /></td><td>Jrengik</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Karangpenang3.png" /></td><td>Karangpenang</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Kedungdung4.png" /></td><td>Kedungdung</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Ketapang5.png" /></td><td>Ketapang</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Omben6.png" /></td><td>Omben</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Pangarengan7.png" /></td><td>Pangarengan</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Robatal8.png" /></td><td>Robatal</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Sampang9.png" /></td><td>Sampang</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Sokobanah10.png" /></td><td>Sokobanah</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Sreseh11.png" /></td><td>Sreseh</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Tambelangan12.png" /></td><td>Tambelangan</td></tr><tr><td style="text-align: center;"><img src="legend/KabupatenSampang_1_Torjun13.png" /></td><td>Torjun</td></tr></table>', layer: layer_KabupatenSampang_1},
+            {label: "Google Maps", layer: layer_GoogleMaps_0},]
+        var lay = L.control.layers.tree(null, overlaysTree,{
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: true,
+        });
+        lay.addTo(map);
+        setBounds();
+        var i = 0;
+        layer_KabupatenSampang_1.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['WADMKC'] !== null?String('<div style="color: #323232; font-size: 10pt; font-weight: bold; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['WADMKC']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_KabupatenSampang_1'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        resetLabels([layer_KabupatenSampang_1]);
+        map.on("zoomend", function(){
+            resetLabels([layer_KabupatenSampang_1]);
+        });
+        map.on("layeradd", function(){
+            resetLabels([layer_KabupatenSampang_1]);
+        });
+        map.on("layerremove", function(){
+            resetLabels([layer_KabupatenSampang_1]);
+        });
+        </script>        
+    </body>
+</html>
